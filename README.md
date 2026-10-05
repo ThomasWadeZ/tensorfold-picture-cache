@@ -1,6 +1,6 @@
 # tensorfold-picture-cache
 
-给 TensorFold（GLM-5.3-Flash-EXL3，双 DGX Spark）的图片前端缓存补丁与实测记录：[`patches/0071-glm-picture-cache.patch`](patches/0071-glm-picture-cache.patch)。
+给 TensorFold（GLM-5.3-Flash-EXL3，双 DGX Spark）的图片前端缓存补丁与实测记录：[`patches/0074-glm-picture-cache.patch`](patches/0074-glm-picture-cache.patch)。
 
 请求携带整条会话（含历史里的每一张图），引擎每轮都把每张图重新解码、缩放拟合、算指纹——这部分发生在引擎看到提示词之前，直接加在首字时间上。而图片的像素不会变，所以把"读一张图"的结果按源文件字节记下来：下一轮直接交回行数和 key，不再重读。只占主机内存；`TENSORFOLD_GLM_PICTURE_CACHE=0` 关闭，`..._MB` 限制记住的源字节。
 
@@ -38,7 +38,7 @@
 
 ## 文件
 
-- 补丁：[`patches/0071-glm-picture-cache.patch`](patches/0071-glm-picture-cache.patch)（对 v1.4 纯净树 `patch -p0` 可逐字节复原部署文件）
+- 补丁：[`patches/0074-glm-picture-cache.patch`](patches/0074-glm-picture-cache.patch)（对 v1.4 纯净树 `patch -p0` 可逐字节复原部署文件；编号 0074，因为 0071–0073 已被其他开放 PR 占用）
 - 复测脚本：[`pic-front-test2.py`](pic-front-test2.py)（10/70 张 + 纯文字对照）、[`pic-correct.py`](pic-correct.py)（正确性）
 
 ## 上游 PR
