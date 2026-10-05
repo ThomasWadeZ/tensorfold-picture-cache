@@ -51,4 +51,4 @@
 
 ## 上游 PR
 
-- 向上游 MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold 的 PR：[#63](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/pull/63)
+- 向上游 MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold 的 PR：[#63](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/pull/63)（0074 图片前端缓存）、[#64](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/pull/64)（0075 引用的标记不当图片）
