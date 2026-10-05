@@ -1,6 +1,6 @@
 # tensorfold-picture-cache
 
-给 TensorFold（GLM-5.3-Flash-EXL3，双 DGX Spark）的图片前端缓存补丁与实测记录：[`patches/0074-glm-picture-cache.patch`](patches/0074-glm-picture-cache.patch)。
+给 TensorFold（GLM-5.3-Flash-EXL3，双 DGX Spark）的补丁与实测记录：图片前端缓存 [`0074`](patches/0074-glm-picture-cache.patch)、引用的标记不当图片 [`0075`](patches/0075-vision-quoted-markers.patch)。
 
 请求携带整条会话（含历史里的每一张图），引擎每轮都把每张图重新解码、缩放拟合、算指纹——这部分发生在引擎看到提示词之前，直接加在首字时间上。而图片的像素不会变，所以把"读一张图"的结果按源文件字节记下来：下一轮直接交回行数和 key，不再重读。只占主机内存；`TENSORFOLD_GLM_PICTURE_CACHE=0` 关闭，`..._MB` 限制记住的源字节。
 
@@ -36,9 +36,17 @@
 
 只占主机内存：记住的源字节上限 384 MB（`TENSORFOLD_GLM_PICTURE_CACHE_MB`，LRU），另外最多留 8 张拟合好的画布（`TENSORFOLD_GLM_PICTURE_CANVASES`）。显卡上不分配任何东西。
 
+## 引用的标记不当图片（[`patches/0075-vision-quoted-markers.patch`](patches/0075-vision-quoted-markers.patch)）
+
+对话里只要引用过引擎自己的模板源码、日志或报错原文（内含完整标记段），之后每一轮带图的请求都会被 400（`the prompt's image and video markers do not match its images and videos`）：引擎把"引用的标记"数成了真图片。一个真实会话实测躺着 59 个图片标记段 + 17 个视频标记段，从此带图必挂。引用的完整标记段与模板写的在字节上无法区分，所以 [`0075`](patches/0075-vision-quoted-markers.patch) 让 `server/prompts.py` 的 `MediaMarks` 给请求里**每一个**图片/视频打一次性标记（原来只在工具结果带图时打），前端新增 `escape_quoted` 把**不紧跟标记的**标记段在 `<|` 后插零宽空格转义：引用永远停留在文字里，请求自己的标记照常展开；裸 token（单独出现的 `<|image|>`）同样转义。模板或客户端漏图时依旧拒绝，守卫没有放松。
+
+- 实测：引用模板宏原文 + 1 张真图 200；引用塞在工具结果里 200；2 张真图 + 引用日志答"红色"（真标记仍落在正确位置）；散文解码 64.9 / 62.6 / 65.9 tok/s（底线 60；只动提示词准备，不碰解码路径）。
+- 部署与回滚：第三个挂载文件（`server/prompts.py`），`patch -p0 -R` 逐字节退回 0074 状态与纯净树。
+
 ## 文件
 
 - 补丁：[`patches/0074-glm-picture-cache.patch`](patches/0074-glm-picture-cache.patch)（对 v1.4 纯净树 `patch -p0` 可逐字节复原部署文件；编号 0074，因为 0071–0073 已被其他开放 PR 占用）
+- 补丁：[`patches/0075-vision-quoted-markers.patch`](patches/0075-vision-quoted-markers.patch)（在 0074 之后 `patch -p0` 应用，改 `tensorfold/server/prompts.py` 与 `tensorfold/vision/glm.py` 两个文件）
 - 复测脚本：[`pic-front-test2.py`](pic-front-test2.py)（10/70 张 + 纯文字对照）、[`pic-correct.py`](pic-correct.py)（正确性）
 
 ## 上游 PR
