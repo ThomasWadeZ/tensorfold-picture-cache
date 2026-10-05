@@ -1,0 +1,35 @@
+## Description and Motivation
+
+Three fixes to how the kept-state pool treats saved conversation states, all in `families/glm5_next/cuda/multi.py`:
+
+1. **Copy over cut.** When a conversation resumes from a shared prefix it used to take those pool rows over wholesale, cutting them off the donor and dropping every bookmark the donor had on top — the donor then cold-starts from almost zero even with a mostly empty pool. The rows are now copied into an extent of the stream's own and the donor keeps its bookmarks (`TF_GLM_POOL_COPY_RIVALS=0` reverts to the cut).
+
+2. **A byte budget with hand-back.** The pool counted bookmark slots but never weighed what they own, and dropping one returned nothing: a few long conversations drove the hosts to 0.1 GB free. The kept states are now bounded together by bytes (`TF_GLM_KEPT_BYTES_GIB`, default 4 GiB, least-recently-used past that), and freed device memory is handed back to the driver once 512 MB has piled up (returning per drop measurably slowed decoding).
+
+3. **A per-conversation quota.** A bookmark after every model reply let one long conversation eat every slot, and conversations taking turns kept chilling each other out. A conversation now keeps a few of its own at its turn boundaries at most (`TF_GLM_KEEP_PER_CHAT`, we run 2; 0 is the old no-limit), while the shared system-prompt state and mid-prefill pauses do not count against the quota — a kept state counts as "own" only when taken at that conversation's own turn boundary.
+
+`/health` now reports the per-conversation state table (`kept_mix`) and the byte budget (`kept_bytes`, `kept_bytes_cap`).
+
+## Related Issues
+
+None. Independent of #63 and #64: this touches `families/glm5_next/cuda/multi.py` only.
+
+## Testing
+
+* Offline: the pristine v1.4 tree + this patch reproduces the deployed `multi.py` byte-identically (`sha256` verified), and `patch -p0 -R` walks back to pristine.
+* Live on two Sparks (mounted hash `82e53673` on both ranks):
+    * a hot session with several hundred K of context keeps answering from cache while a new session resumes a shared prefix (its rows are copied, not cut);
+    * host free memory no longer slides to 0.1 GB: kept bytes cap at 4 GiB and reserved-but-unallocated device memory is returned once 512 MB piles up;
+    * one session chatting for hundreds of turns holds only its quota of states; `/health`'s `kept_mix.by_chat` shows each conversation's own/shared counts and rows;
+    * eviction changes only speed, never the reply — a conversation that lost its states simply cold-starts; temperature-0 spot checks before/after gave identical answers.
+* Decode path untouched: prose decode measured 64.9 / 62.6 / 65.9 tok/s (floor 60) on this engine after deploy.
+
+## Checklist:
+
+- [x] I have read the README and `scripts/config.sh` and kept my changes consistent with them.
+- [x] My pull request has a sound title and description (not something vague like `Update README.md`).
+- [x] My change is reproducible and verified (script syntax check, `scripts/prepare.sh`, a launch, or a re-measurement).
+- [x] A patch change keeps drafted replies equal to serial ones, and I said how I checked it (and whether its bits change). Prompt arithmetic is unchanged; bits change only in which states are kept and when their memory is returned.
+- [x] I updated the README and/or `scripts/config.sh` if a setting, default, or measured number changed. The new env knobs are documented in the patch header (`TF_GLM_POOL_COPY_RIVALS`, `TF_GLM_KEPT_BYTES_GIB`, `TF_GLM_KEEP_PER_CHAT`).
+- [x] If my change affects memory, I checked rank 0's startup estimate still fits at the default 4 x 1,048,576 FP8 setting. Kept states are capped at 4 GiB by default and freed blocks are returned to the driver.
+- [x] Defaults in `scripts/config.sh` still work out of the box; a new setting has a sane fallback like the existing ones. All three knobs default sensibly (copy on, 4 GiB, 3 per chat; we run 2).
