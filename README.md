@@ -43,4 +43,4 @@
 
 ## 上游 PR
 
-- 向上游 MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold 的 PR：（链接待补）
+- 向上游 MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold 的 PR：[#63](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold/pull/63)
